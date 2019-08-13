@@ -316,10 +316,11 @@ export function createConnectionResolver({
 
             if (startIndex >= 0) options.offset = startIndex + 1;
           } else {
+            const model = target.target ? target.target : target;
             const operator = args.after ?
               seqMajVer <= 3 ? '$gt' : Sequelize.Op.gt :
               seqMajVer <= 3 ? '$lt' : Sequelize.Op.lt;
-            options.where[target.primaryKeyAttribute] = { [operator]: cursor.id };
+            options.where[model.primaryKeyAttribute] = { [operator]: cursor.id };
           }
         }
 
