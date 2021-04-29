@@ -1,9 +1,9 @@
 import {
-  fromGlobalId,
-  connectionFromArray,
-  nodeDefinitions,
+  connectionArgs,
   connectionDefinitions,
-  connectionArgs
+  connectionFromArray,
+  fromGlobalId,
+  nodeDefinitions
 } from 'graphql-relay';
 
 import {
@@ -12,13 +12,15 @@ import {
 
 import {
   base64,
-  unbase64,
+  unbase64
 } from './base64.js';
 
 import _ from 'lodash';
 import simplifyAST from './simplifyAST';
 
-import {Model, Sequelize} from 'sequelize';
+import { Model, Sequelize } from 'sequelize';
+import { replaceWhereOperators } from './replaceWhereOperators.js';
+
 const [seqMajVer] = Sequelize.version.split('.');
 
 function getModelOfInstance(instance) {
@@ -112,7 +114,8 @@ export function createNodeInterface(sequelize) {
   };
 }
 
-export {createNodeInterface as sequelizeNodeInterface};
+export { createNodeInterface as sequelizeNodeInterface };
+export { createConnection as sequelizeConnection };
 
 export function nodeType(connectionType) {
   return connectionType._fields.edges.type.ofType._fields.node.type;
@@ -180,7 +183,7 @@ export function createConnectionResolver({
       Object.assign(result, where(key, value, result));
     });
 
-    return result;
+    return replaceWhereOperators(result);
   };
 
   let resolveEdge = function (item, index, queriedCursor, sourceArgs = {}, source) {
@@ -446,4 +449,3 @@ export function createConnection({
   };
 }
 
-export {createConnection as sequelizeConnection};
