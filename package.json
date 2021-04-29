@@ -1,6 +1,6 @@
 {
-  "name": "graphql-sequelize",
-  "version": "9.4.3",
+  "name": "jonmagic-graphql-sequelize",
+  "version": "9.4.3-hack01",
   "description": "GraphQL & Relay for MySQL & Postgres via Sequelize",
   "main": "lib/index.js",
   "options": {
