@@ -7,7 +7,7 @@ import attributeFields from '../../../src/attributeFields';
 import {base64, unbase64} from '../../../src/base64.js';
 import resolver from '../../../src/resolver';
 import {uniq, property, sortBy} from 'lodash';
-import { Promise, sequelize } from '../../support/helper';
+import { sequelize } from '../../support/helper';
 
 import {
   sequelizeConnection,
@@ -32,8 +32,8 @@ import {
 } from 'graphql-relay';
 
 describe('relay', function () {
-  describe('connection', function () {
-    before(async function () {
+  describe('connection', () => {
+    before(async () => {
       var self = this;
 
       this.User = sequelize.define('user', {});
@@ -144,7 +144,7 @@ describe('relay', function () {
         connectionFields: () => ({
           totalCount: {
             type: GraphQLInt,
-            resolve: function (connection, args, {logging}) {
+            resolve: function (connection, args, { logging }) {
               self.userTaskConnectionFieldSpy(connection);
               return connection.source.countTasks({
                 where: connection.where,
@@ -221,7 +221,7 @@ describe('relay', function () {
       this.userProjectConnection2Resolver = createConnectionResolver({
         target: this.User.Projects,
         orderBy: this.orderByEnum.name,
-      })
+      });
 
       this.userType = new GraphQLObjectType({
         name: this.User.name,
@@ -311,13 +311,13 @@ describe('relay', function () {
 
       this.taskId = 0;
 
-      let projects = await Promise.join(
+      let projects = await Promise.all([
         this.Project.create({}),
         this.Project.create({}),
         this.Project.create({}),
         this.Project.create({}),
         this.Project.create({})
-      );
+      ]);
       [this.projectA, this.projectB, this.projectC, this.projectD, this.projectE] = sortBy(projects, property('id'));
 
       this.userA = await this.User.create({
@@ -430,7 +430,7 @@ describe('relay', function () {
         include: [this.User.Tasks]
       });
 
-      await Promise.join(
+      await Promise.all([
         this.projectA.update({
           ownerId: this.userA.get('id')
         }),
@@ -454,10 +454,10 @@ describe('relay', function () {
           projectId: this.projectE.get('id'),
           userId: this.userA.get('id')
         })
-      );
+      ]);
     });
 
-    it('should not duplicate attributes', async function () {
+    it('should not duplicate attributes', async () => {
       let sqlSpy = sinon.spy();
 
       let projectConnectionAttributesUnique;
@@ -510,18 +510,21 @@ describe('relay', function () {
         })
       });
 
-      await graphql(schema, `
-        {
-          user(id: ${this.userA.id}) {
-            projects {
-              edges {
-                node {
-                  tasks {
-                    edges {
-                      cursor
-                      node {
-                        id
-                        name
+      await graphql({
+        schema,
+        source: `
+          {
+            user(id: ${this.userA.id}) {
+              projects {
+                edges {
+                  node {
+                    tasks {
+                      edges {
+                        cursor
+                        node {
+                          id
+                          name
+                        }
                       }
                     }
                   }
@@ -529,9 +532,10 @@ describe('relay', function () {
               }
             }
           }
-        }
-      `, null, {
-        logging: sqlSpy
+        `,
+        contextValue: {
+          logging: sqlSpy
+        },
       });
 
 
@@ -539,19 +543,22 @@ describe('relay', function () {
 
     });
 
-    it('should handle orderBy function case', async function () {
-      const result = await graphql(this.schema, `
-        {
-          user(id: ${this.userA.id}) {
-            projects(first: 1) {
-              edges {
-                node {
-                  tasks(orderBy: NAME_FUNC, first: 5) {
-                    edges {
-                      cursor
-                      node {
-                        id
-                        name
+    it('should handle orderBy function case', async () => {
+      const result = await graphql({
+        schema: this.schema,
+        source: `
+          {
+            user(id: ${this.userA.id}) {
+              projects(first: 1) {
+                edges {
+                  node {
+                    tasks(orderBy: NAME_FUNC, first: 5) {
+                      edges {
+                        cursor
+                        node {
+                          id
+                          name
+                        }
                       }
                     }
                   }
@@ -559,8 +566,9 @@ describe('relay', function () {
               }
             }
           }
-        }
-      `, null, {});
+        `,
+        contextValue: {}
+      });
 
       if (result.errors) throw new Error(result.errors[0]);
 
@@ -568,20 +576,24 @@ describe('relay', function () {
       expect(this.projectOrderSpy.alwaysCalledWithMatch({}, { first: 5 })).to.be.ok;
     });
 
-    it('should support connectionResolver orderBy enum references via name', async function () {
-      const result = await graphql(this.schema, `
-        {
-          user(id: ${this.userA.id}) {
-            projects2(orderBy: LATEST) {
-              edges {
-                node {
-                  id
+    it('should support connectionResolver orderBy enum references via name', async () => {
+      const result = await graphql({
+        schema: this.schema,
+        source: `
+          {
+            user(id: ${this.userA.id}) {
+              projects2(orderBy: LATEST) {
+                edges {
+                  node {
+                    id
+                  }
                 }
               }
             }
           }
-        }
-      `, null, {});
+        `,
+        contextValue: {},
+      });
 
       if (result.errors) throw new Error(result.errors[0]);
 
@@ -589,20 +601,23 @@ describe('relay', function () {
       expect(+fromGlobalId(node.id).id).to.equal(5);
     });
 
-    it('should properly reverse orderBy with NULLS and last', async function () {
+    it('should properly reverse orderBy with NULLS and last', async () => {
       let sqlSpy = sinon.spy();
-      await graphql(this.schema, `
-        {
-          user(id: ${this.userA.id}) {
-            projects(first: 1) {
-              edges {
-                node {
-                  tasks(orderBy: NAME_NULLS_LAST, last: 10) {
-                    edges {
-                      cursor
-                      node {
-                        id
-                        name
+      await graphql({
+        schema: this.schema,
+        source: `
+          {
+            user(id: ${this.userA.id}) {
+              projects(first: 1) {
+                edges {
+                  node {
+                    tasks(orderBy: NAME_NULLS_LAST, last: 10) {
+                      edges {
+                        cursor
+                        node {
+                          id
+                          name
+                        }
                       }
                     }
                   }
@@ -610,13 +625,14 @@ describe('relay', function () {
               }
             }
           }
-        }
-      `, null, { logging: sqlSpy });
+        `,
+        contextValue: { logging: sqlSpy },
+      });
 
       expect(sqlSpy.lastCall.args[0].match('DESC NULLS LAST')).to.be.ok;
     });
 
-    it('should support in-query slicing and pagination with first and orderBy', async function () {
+    it('should support in-query slicing and pagination with first and orderBy', async () => {
       let firstThree = this.userA.tasks.slice(this.userA.tasks.length - 3, this.userA.tasks.length);
       let nextThree = this.userA.tasks.slice(this.userA.tasks.length - 6, this.userA.tasks.length - 3);
       let lastThree = this.userA.tasks.slice(this.userA.tasks.length - 9, this.userA.tasks.length - 6);
@@ -645,26 +661,30 @@ describe('relay', function () {
       };
 
       let query = (after) => {
-        return graphql(this.schema, `
-          {
-            user(id: ${this.userA.id}) {
-              tasks(first: 3, ${after ? 'after: "' + after + '", ' : ''} orderBy: LATEST) {
-                edges {
-                  cursor
-                  node {
-                    id
-                    name
+        return graphql({
+          schema: this.schema,
+          source: `
+            {
+              user(id: ${this.userA.id}) {
+                tasks(first: 3, ${after ? 'after: "' + after + '", ' : ''} orderBy: LATEST) {
+                  edges {
+                    cursor
+                    node {
+                      id
+                      name
+                    }
                   }
-                }
-                pageInfo {
-                  hasNextPage
-                  hasPreviousPage
-                  endCursor
+                  pageInfo {
+                    hasNextPage
+                    hasPreviousPage
+                    endCursor
+                  }
                 }
               }
             }
-          }
-        `, null, {});
+          `,
+          contextValue: {}
+        });
       };
 
       let firstResult = await query();
@@ -683,26 +703,30 @@ describe('relay', function () {
       expect(lastResult.data.user.tasks.pageInfo.hasPreviousPage).to.equal(true);
     });
 
-    it('should support in-query slicing and pagination with first and CUSTOM orderBy', async function () {
-      const correctOrder = await graphql(this.schema, `
-        {
-          user(id: ${this.userA.id}) {
-            tasks(first: 9, orderBy: CUSTOM) {
-              edges {
-                cursor
-                node {
-                  id
-                  name
+    it('should support in-query slicing and pagination with first and CUSTOM orderBy', async () => {
+      const correctOrder = await graphql({
+        schema: this.schema,
+        source: `
+          {
+            user(id: ${this.userA.id}) {
+              tasks(first: 9, orderBy: CUSTOM) {
+                edges {
+                  cursor
+                  node {
+                    id
+                    name
+                  }
                 }
-              }
-              pageInfo {
-                hasNextPage
-                endCursor
+                pageInfo {
+                  hasNextPage
+                  endCursor
+                }
               }
             }
           }
-        }
-      `);
+        `,
+        contextValue: {},
+      });
       const reordered = correctOrder.data.user.tasks.edges.map(({node}) => {
         const targetId = fromGlobalId(node.id).id;
         return this.userA.tasks.find(task => {
@@ -739,26 +763,30 @@ describe('relay', function () {
       };
 
       let query = (after) => {
-        return graphql(this.schema, `
-          {
-            user(id: ${this.userA.id}) {
-              tasks(first: 3, ${after ? 'after: "' + after + '", ' : ''} orderBy: CUSTOM) {
-                edges {
-                  cursor
-                  node {
-                    id
-                    name
+        return graphql({
+          schema: this.schema,
+          source: `
+            {
+              user(id: ${this.userA.id}) {
+                tasks(first: 3, ${after ? 'after: "' + after + '", ' : ''} orderBy: CUSTOM) {
+                  edges {
+                    cursor
+                    node {
+                      id
+                      name
+                    }
                   }
-                }
-                pageInfo {
-                  hasNextPage
-                  hasPreviousPage
-                  endCursor
+                  pageInfo {
+                    hasNextPage
+                    hasPreviousPage
+                    endCursor
+                  }
                 }
               }
             }
-          }
-        `);
+          `,
+          contextValue: {},
+        });
       };
 
       let firstResult = await query();
@@ -777,7 +805,7 @@ describe('relay', function () {
       expect(lastResult.data.user.tasks.pageInfo.hasPreviousPage).to.equal(true);
     });
 
-    it('should support pagination with where', async function () {
+    it('should support pagination with where', async () => {
       const completedTasks = this.userA.tasks.filter(task => task.completed);
 
       expect(completedTasks.length).to.equal(4);
@@ -808,26 +836,30 @@ describe('relay', function () {
       };
 
       let query = (after) => {
-        return graphql(this.schema, `
-          {
-            user(id: ${this.userA.id}) {
-              tasks(first: 3, ${after ? 'after: "' + after + '", ' : ''} completed: true) {
-                edges {
-                  cursor
-                  node {
-                    id
-                    name
+        return graphql({
+          schema: this.schema,
+          source: `
+            {
+              user(id: ${this.userA.id}) {
+                tasks(first: 3, ${after ? 'after: "' + after + '", ' : ''} completed: true) {
+                  edges {
+                    cursor
+                    node {
+                      id
+                      name
+                    }
                   }
-                }
-                pageInfo {
-                  hasNextPage
-                  hasPreviousPage
-                  endCursor
+                  pageInfo {
+                    hasNextPage
+                    hasPreviousPage
+                    endCursor
+                  }
                 }
               }
             }
-          }
-        `, null, {});
+          `,
+          contextValue: {},
+        });
       };
 
 
@@ -842,27 +874,31 @@ describe('relay', function () {
       expect(nextResult.data.user.tasks.pageInfo.hasPreviousPage).to.equal(true);
     });
 
-    it('should support pagination on N:M', async function () {
+    it('should support pagination on N:M', async () => {
       let query = (after) => {
-        return graphql(this.schema, `
-          {
-            user(id: ${this.userA.id}) {
-              projects(first: 2, ${after ? 'after: "' + after + '", ' : ''}) {
-                edges {
-                  cursor
-                  node {
-                    id
+        return graphql({
+          schema: this.schema,
+          source: `
+            {
+              user(id: ${this.userA.id}) {
+                projects(first: 2, ${after ? 'after: "' + after + '", ' : ''}) {
+                  edges {
+                    cursor
+                    node {
+                      id
+                    }
                   }
-                }
-                pageInfo {
-                  hasNextPage
-                  hasPreviousPage
-                  endCursor
+                  pageInfo {
+                    hasNextPage
+                    hasPreviousPage
+                    endCursor
+                  }
                 }
               }
             }
-          }
-        `, null, {});
+          `,
+          contextValue: {},
+        });
       };
 
 
@@ -879,22 +915,26 @@ describe('relay', function () {
       expect(thirdResult.data.user.projects.pageInfo.hasPreviousPage).to.equal(true);
     });
 
-    it('should support in-query slicing with user provided args/where', async function () {
-      let result = await graphql(this.schema, `
-        {
-          user(id: ${this.userA.id}) {
-            tasks(first: 2, completed: true, orderBy: LATEST) {
-              edges {
-                cursor
-                node {
-                  id
-                  name
+    it('should support in-query slicing with user provided args/where', async () => {
+      let result = await graphql({
+        schema: this.schema,
+        source: `
+          {
+            user(id: ${this.userA.id}) {
+              tasks(first: 2, completed: true, orderBy: LATEST) {
+                edges {
+                  cursor
+                  node {
+                    id
+                    name
+                  }
                 }
               }
             }
           }
-        }
-      `, null, {});
+        `,
+        contextValue: {}
+      });
 
       if (result.errors) throw new Error(result.errors[0].stack);
 
@@ -907,22 +947,26 @@ describe('relay', function () {
       ]);
     });
 
-    it('should support multiple user provided args/where that act on a single database field', async function () {
-      let result = await graphql(this.schema, `
-        {
-          user(id: ${this.userA.id}) {
-            tasks(first: 5, orderBy: LATEST, timeRangeOne: true, timeRangeTwo: true) {
-              edges {
-                cursor
-                node {
-                  id
-                  name
+    it('should support multiple user provided args/where that act on a single database field', async () => {
+      let result = await graphql({
+        schema: this.schema,
+        source: `
+          {
+            user(id: ${this.userA.id}) {
+              tasks(first: 5, orderBy: LATEST, timeRangeOne: true, timeRangeTwo: true) {
+                edges {
+                  cursor
+                  node {
+                    id
+                    name
+                  }
                 }
               }
             }
           }
-        }
-      `, null, {});
+        `,
+        contextValue: {},
+      });
 
       if (result.errors) throw new Error(result.errors[0].stack);
 
@@ -936,27 +980,31 @@ describe('relay', function () {
       ]);
     });
 
-    it('should support nested aliased fields', async function () {
-      let result = await graphql(this.schema, `
-        {
-          user(id: ${this.userA.id}) {
-            tasks(first: 1, completed: true, orderBy: LATEST) {
-              edges {
-                node {
-                  id
-                  title: name
+    it('should support nested aliased fields', async () => {
+      let result = await graphql({
+        schema: this.schema,
+        source: `
+          {
+            user(id: ${this.userA.id}) {
+              tasks(first: 1, completed: true, orderBy: LATEST) {
+                edges {
+                  node {
+                    id
+                    title: name
+                  }
                 }
               }
             }
           }
-        }
-      `, null, {});
+        `,
+        contextValue: {},
+      });
 
       if (result.errors) throw new Error(result.errors[0].stack);
       expect(result.data.user.tasks.edges[0].node.title).to.equal('CAA');
     });
 
-    it('should support reverse pagination with last and orderBy', async function () {
+    it('should support reverse pagination with last and orderBy', async () => {
       let firstThree = this.userA.tasks.slice(0, 3);
       let nextThree = this.userA.tasks.slice(3, 6);
       let lastThree = this.userA.tasks.slice(6, 9);
@@ -985,26 +1033,30 @@ describe('relay', function () {
       };
 
       let query = (before) => {
-        return graphql(this.schema, `
-          {
-            user(id: ${this.userA.id}) {
-              tasks(last: 3, ${before ? 'before: "' + before + '", ' : ''} orderBy: LATEST) {
-                edges {
-                  cursor
-                  node {
-                    id
-                    name
+        return graphql({
+          schema: this.schema,
+          source: `
+            {
+              user(id: ${this.userA.id}) {
+                tasks(last: 3, ${before ? 'before: "' + before + '", ' : ''} orderBy: LATEST) {
+                  edges {
+                    cursor
+                    node {
+                      id
+                      name
+                    }
                   }
-                }
-                pageInfo {
-                  hasNextPage
-                  hasPreviousPage
-                  endCursor
+                  pageInfo {
+                    hasNextPage
+                    hasPreviousPage
+                    endCursor
+                  }
                 }
               }
             }
-          }
-        `, null, {});
+          `,
+          contextValue: {},
+        });
       };
 
       let firstResult = await query();
@@ -1023,64 +1075,75 @@ describe('relay', function () {
       expect(lastResult.data.user.tasks.pageInfo.hasPreviousPage).to.equal(false);
     });
 
-    it('should support fetching the next element although it has the same orderValue', async function () {
-      let firstResult = await graphql(this.schema, `
-        {
-          user(id: ${this.userA.id}) {
-            tasks(first: 3, orderBy: NAME) {
-              edges {
-                cursor
-                node {
-                  id
-                  name
+    it('should support fetching the next element although it has the same orderValue', async () => {
+      let firstResult = await graphql({
+        schema: this.schema,
+        source: `
+          {
+            user(id: ${this.userA.id}) {
+              tasks(first: 3, orderBy: NAME) {
+                edges {
+                  cursor
+                  node {
+                    id
+                    name
+                  }
                 }
-              }
-              pageInfo {
-                endCursor
+                pageInfo {
+                  endCursor
+                }
               }
             }
           }
-        }
-      `, null, {});
+        `,
+        contextValue: {},
+      });
 
-      let secondResult = await graphql(this.schema, `
-        {
-          user(id: ${this.userA.id}) {
-            tasks(first: 3, after: "${firstResult.data.user.tasks.pageInfo.endCursor}", orderBy: NAME) {
-              edges {
-                cursor
-                node {
-                  id
-                  name
+      let secondResult = await graphql({
+        schema: this.schema,
+        source: `
+          {
+            user(id: ${this.userA.id}) {
+              tasks(first: 3, after: "${firstResult.data.user.tasks.pageInfo.endCursor}", orderBy: NAME) {
+                edges {
+                  cursor
+                  node {
+                    id
+                    name
+                  }
                 }
-              }
-              pageInfo {
-                endCursor
+                pageInfo {
+                  endCursor
+                }
               }
             }
           }
-        }
-      `, null, {});
+        `,
+        contextValue: {},
+      });
 
       expect(firstResult.data.user.tasks.edges[2].node.name).to.equal('ABC');
       expect(firstResult.data.user.tasks.edges[2].node.name).to.equal(secondResult.data.user.tasks.edges[0].node.name);
     });
 
-    it('should support prefetching two nested connections', async function () {
+    it('should support prefetching two nested connections', async () => {
       let sqlSpy = sinon.spy();
 
-      let result = await graphql(this.schema, `
-        {
-          user(id: ${this.userA.id}) {
-            projects {
-              edges {
-                node {
-                  tasks {
-                    edges {
-                      cursor
-                      node {
-                        id
-                        name
+      let result = await graphql({
+        schema: this.schema,
+        source: `
+          {
+            user(id: ${this.userA.id}) {
+              projects {
+                edges {
+                  node {
+                    tasks {
+                      edges {
+                        cursor
+                        node {
+                          id
+                          name
+                        }
                       }
                     }
                   }
@@ -1088,15 +1151,13 @@ describe('relay', function () {
               }
             }
           }
-        }
-      `, null);
+        `,
+      });
 
       if (result.errors) throw new Error(result.errors[0].stack);
 
       const nodeNames = result.data.user.projects.edges.map(edge => {
-        return edge.node.tasks.edges.map(edge => {
-          return edge.node.name;
-        }).sort();
+        return edge.node.tasks.edges.map(edge => edge.node.name).sort();
       });
       expect(nodeNames).to.deep.equal([
         [
@@ -1121,21 +1182,24 @@ describe('relay', function () {
       ]);
     });
 
-    it('should support paging a nested connection', async function () {
+    it('should support paging a nested connection', async () => {
       let sqlSpy = sinon.spy();
 
-      let result = await graphql(this.schema, `
-        {
-          user(id: ${this.userA.id}) {
-            projects {
-              edges {
-                node {
-                  tasks(first: 3, orderBy: LATEST) {
-                    edges {
-                      cursor
-                      node {
-                        id
-                        name
+      let result = await graphql({
+        schema: this.schema,
+        source: `
+          {
+            user(id: ${this.userA.id}) {
+              projects {
+                edges {
+                  node {
+                    tasks(first: 3, orderBy: LATEST) {
+                      edges {
+                        cursor
+                        node {
+                          id
+                          name
+                        }
                       }
                     }
                   }
@@ -1143,14 +1207,12 @@ describe('relay', function () {
               }
             }
           }
-        }
-      `, null);
+        `
+      });
 
       if (result.errors) throw new Error(result.errors[0].stack);
 
-      let projects = result.data.user.projects.edges.map(function (edge) {
-        return edge.node;
-      });
+      let projects = result.data.user.projects.edges.map(edge => edge.node);
 
       expect(projects[0].tasks.edges.length).to.equal(3);
       expect(projects[1].tasks.edges.length).to.equal(3);
@@ -1159,16 +1221,20 @@ describe('relay', function () {
       expect(projects[1].tasks.edges[0].node.id).to.equal(toGlobalId(this.Task.name, this.userA.tasks[8].get('id')));
     });
 
-    it('should support connection fields', async function () {
-      let result = await graphql(this.schema, `
-        {
-          user(id: ${this.userA.id}) {
-            tasks {
-              totalCount
+    it('should support connection fields', async () => {
+      let result = await graphql({
+        schema: this.schema,
+        source: `
+          {
+            user(id: ${this.userA.id}) {
+              tasks {
+                totalCount
+              }
             }
           }
-        }
-      `, null, {});
+        `,
+        contextValue: {},
+      });
 
       if (result.errors) throw new Error(result.errors[0].stack);
 
@@ -1176,22 +1242,26 @@ describe('relay', function () {
       expect(this.userTaskConnectionFieldSpy.firstCall.args[0].source.get('tasks')).to.be.undefined;
     });
 
-    it('should support connection fields on nested connections', async function () {
-      let result = await graphql(this.schema, `
-        {
-          user(id: ${this.userA.id}) {
-            projects {
-              edges {
-                node {
-                  tasks {
-                    totalCount
+    it('should support connection fields on nested connections', async () => {
+      let result = await graphql({
+        schema: this.schema,
+        source: `
+          {
+            user(id: ${this.userA.id}) {
+              projects {
+                edges {
+                  node {
+                    tasks {
+                      totalCount
+                    }
                   }
                 }
               }
             }
           }
-        }
-      `, null, {});
+        `,
+        contextValue: {},
+      });
 
       if (result.errors) throw new Error(result.errors[0].stack);
 
@@ -1200,27 +1270,30 @@ describe('relay', function () {
       expect(this.projectTaskConnectionFieldSpy.firstCall.args[0].source.get('tasks')).to.be.undefined;
     });
 
-    it('should support edgeFields', async function () {
+    it('should support edgeFields', async () => {
       let sqlSpy = sinon.spy();
 
-      let result = await graphql(this.schema, `
-        {
-          user(id: ${this.userA.id}) {
-            projects {
-              edges {
-                ...projectOwner
-                node {
-                  id
+      let result = await graphql({
+        schema: this.schema,
+        source: `
+          {
+            user(id: ${this.userA.id}) {
+              projects {
+                edges {
+                  ...projectOwner
+                  node {
+                    id
+                  }
                 }
               }
             }
           }
-        }
 
-        fragment projectOwner on userProjectEdge {
-          isOwner
-        }
-      `, null);
+          fragment projectOwner on userProjectEdge {
+            isOwner
+          }
+        `,
+      });
 
       if (result.errors) throw new Error(result.errors[0].stack);
 
@@ -1228,18 +1301,22 @@ describe('relay', function () {
       expect(isOwner.sort()).to.deep.equal([true, false, false, false, false].sort());
     });
 
-    it('should support connection fields with args/where', async function () {
+    it('should support connection fields with args/where', async () => {
       let sqlSpy = sinon.spy();
 
-      let result = await graphql(this.schema, `
-        {
-          user(id: ${this.userA.id}) {
-            tasks(completed: true) {
-              totalCount
+      let result = await graphql({
+        schema: this.schema,
+        source: `
+          {
+            user(id: ${this.userA.id}) {
+              tasks(completed: true) {
+                totalCount
+              }
             }
           }
-        }
-      `, null, {});
+        `,
+        contextValue: { logging: sqlSpy },
+      });
 
       if (result.errors) throw new Error(result.errors[0].stack);
 
@@ -1247,28 +1324,32 @@ describe('relay', function () {
       expect(this.userTaskConnectionFieldSpy.firstCall.args[0].source.get('tasks')).to.be.undefined;
     });
 
-    it('should not barf on paging if there are no connection edges', async function () {
+    it('should not barf on paging if there are no connection edges', async () => {
       let user = await this.User.create({});
 
-      let result = await graphql(this.schema, `
-        {
-          user(id: ${user.get('id')}) {
-            tasks(first: 10) {
-              totalCount
+      let result = await graphql({
+        schema: this.schema,
+        source: `
+          {
+            user(id: ${user.get('id')}) {
+              tasks(first: 10) {
+                totalCount
 
-              edges {
-                node {
-                  id
+                edges {
+                  node {
+                    id
+                  }
                 }
-              }
 
-              pageInfo {
-                hasNextPage
+                pageInfo {
+                  hasNextPage
+                }
               }
             }
           }
-        }
-      `, null, {});
+        `,
+        contextValue: {},
+      });
 
       if (result.errors) throw new Error(result.errors[0].stack);
       expect(result.data.user).not.to.be.null;
@@ -1276,10 +1357,10 @@ describe('relay', function () {
       expect(result.data.user.tasks.pageInfo.hasNextPage).to.equal(false);
     });
 
-    it('should support model connections', async function () {
+    it('should support model connections', async () => {
       let viewer = await this.User.create();
 
-      let tasks = await Promise.join(
+      let tasks = await Promise.all([
         viewer.createTask({
           id: ++this.taskId
         }),
@@ -1289,24 +1370,28 @@ describe('relay', function () {
         this.Task.create({
           id: ++this.taskId
         })
-      );
+      ]);
 
-      let result = await graphql(this.schema, `
-        {
-          viewer {
-            tasks {
-              edges {
-                cursor
-                node {
-                  id
-                  name
+      let result = await graphql({
+        schema: this.schema,
+        source: `
+          {
+            viewer {
+              tasks {
+                edges {
+                  cursor
+                  node {
+                    id
+                    name
+                  }
                 }
               }
             }
           }
-        }
-      `, null, {
-        viewer: viewer
+        `,
+        contextValue: {
+          viewer: viewer
+        },
       });
 
       expect(result.data.viewer.tasks.edges.length).to.equal(2);
@@ -1317,7 +1402,7 @@ describe('relay', function () {
       );
     });
 
-    it('should use cursor.id for stable cursor navigation when not using orderBy', async function () {
+    it('should use cursor.id for stable cursor navigation when not using orderBy', async () => {
       let viewer = await this.User.create();
       let task1 = await viewer.createTask({ id: ++this.taskId, name: 'task1' })
       let task2 = await viewer.createTask({ id: ++this.taskId, name: 'task2' })
