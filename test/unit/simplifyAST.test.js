@@ -1,7 +1,7 @@
 'use strict';
 
-import {expect} from 'chai';
-import simplifyAST from '../../src/simplifyAST';
+const {expect} = require('chai');
+const simplifyAST = require( '../../src/simplifyAST');
 var parser = require('graphql/language/parser').parse // eslint-disable-line
   , parse = function (query) {
     return parser(query).definitions[0];
@@ -352,6 +352,31 @@ describe('simplifyAST', function () {
           fields: {
             firstName: {
               key: 'name',
+              args: {},
+              fields: {}
+            }
+          }
+        }
+      }
+    });
+  });
+
+  it('should handle null arguments', function () {
+    expect(simplifyAST(parse(`
+      {
+        user(id: null) {
+          name
+        }
+      }
+    `))).to.deep.equal({
+      args: {},
+      fields: {
+        user: {
+          args: {
+            id: undefined
+          },
+          fields: {
+            name: {
               args: {},
               fields: {}
             }
