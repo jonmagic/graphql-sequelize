@@ -360,4 +360,29 @@ describe('simplifyAST', function () {
       }
     });
   });
+
+  it('should handle null arguments', function () {
+    expect(simplifyAST(parse(`
+      {
+        user(id: null) {
+          name
+        }
+      }
+    `))).to.deep.equal({
+      args: {},
+      fields: {
+        user: {
+          args: {
+            id: undefined
+          },
+          fields: {
+            name: {
+              args: {},
+              fields: {}
+            }
+          }
+        }
+      }
+    });
+  });
 });

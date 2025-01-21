@@ -18,8 +18,10 @@ import {
 import _ from 'lodash';
 import simplifyAST from './simplifyAST';
 
-import {Model} from 'sequelize';
+import {Model, Sequelize} from 'sequelize';
 import {replaceWhereOperators} from './replaceWhereOperators.js';
+
+const [seqMajVer] = Sequelize.version.split('.');
 
 function getModelOfInstance(instance) {
   return instance instanceof Model ? instance.constructor : instance.Model;
@@ -57,7 +59,7 @@ export function idFetcher(sequelize, nodeTypeMapper) {
 
     const model = Object.keys(sequelize.models).find(model => model === type);
     if (model) {
-      return sequelize.models[model].findByPk ? sequelize.models[model].findByPk(id) : sequelize.models[model].findById(id);
+      return sequelize.models[model].findById(id);
     }
 
     if (nodeType) {
@@ -75,8 +77,6 @@ export function typeResolver(nodeTypeMapper) {
                  ? obj.Model.options.name.singular
                  : obj._modelOptions
                  ? obj._modelOptions.name.singular
-                 : obj.constructor.options
-                 ? obj.constructor.options.name.singular
                  : obj.name);
 
     if (!type) {
@@ -86,7 +86,7 @@ export function typeResolver(nodeTypeMapper) {
 
     const nodeType = nodeTypeMapper.item(type);
     if (nodeType) {
-      return typeof nodeType.type === 'string' ? nodeType.type : nodeType.type.name;
+      return typeof nodeType.type === 'string' ? info.schema.getType(nodeType.type) : nodeType.type;
     }
 
     return null;
@@ -262,13 +262,22 @@ export function createConnectionResolver({
 
       if (args.after || args.before) {
         let cursor = fromCursor(args.after || args.before);
-        let startIndex = Number(cursor.index);
 
-        if (startIndex >= 0) options.offset = startIndex + 1;
+        if (args.orderBy) {
+          let startIndex = Number(cursor.index);
+
+          if (startIndex >= 0) options.offset = startIndex + 1;
+        } else {
+          let operator = args.after ?
+            seqMajVer <= 3 ? '$gt' : Sequelize.Op.gt :
+            seqMajVer <= 3 ? '$lt' : Sequelize.Op.lt;
+          options.where[model.primaryKeyAttribute] = { [operator]: cursor.id };
+        }
       }
 
       options.attributes.unshift(model.primaryKeyAttribute); // Ensure the primary key is always the first selected attribute
       options.attributes = _.uniq(options.attributes);
+
       return before(options, args, context, info);
     },
     after: async function (values, args, context, info) {
@@ -303,6 +312,20 @@ export function createConnectionResolver({
           where: argsToWhere(args)
         }, args, context, info));
 
+        if (cursor) {
+          if (args.orderBy) {
+            const startIndex = Number(cursor.index);
+
+            if (startIndex >= 0) options.offset = startIndex + 1;
+          } else {
+            const model = target.target ? target.target : target;
+            const operator = args.after ?
+              seqMajVer <= 3 ? '$gt' : Sequelize.Op.gt :
+              seqMajVer <= 3 ? '$lt' : Sequelize.Op.lt;
+            options.where[model.primaryKeyAttribute] = { [operator]: cursor.id };
+          }
+        }
+
         if (target.count) {
           if (target.associationType) {
             fullCount = await target.count(source, options);
@@ -324,11 +347,14 @@ export function createConnectionResolver({
         } else {
           index = 0;
         }
-
-        hasNextPage = index + 1 + count <= fullCount;
+        if (args.orderBy) {
+          hasNextPage = index + 1 + count <= fullCount;
+        } else {
+          hasNextPage = count < fullCount;
+        }
         hasPreviousPage = index - count >= 0;
 
-        if (args.last) {
+        if (args.last && args.orderBy) {
           [hasNextPage, hasPreviousPage] = [hasPreviousPage, hasNextPage];
         }
       }
