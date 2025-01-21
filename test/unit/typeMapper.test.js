@@ -18,13 +18,15 @@ const {
   STRING,
   TEXT,
   UUID,
+  UUIDV4,
   DATE,
   DATEONLY,
   TIME,
   ARRAY,
   VIRTUAL,
   JSON,
-  JSONB
+  JSONB,
+  INET,
   } = Sequelize;
 
 import {
@@ -175,6 +177,12 @@ describe('typeMapper', () => {
     });
   });
 
+  describe('UUIDV4', function () {
+    it('should map to GraphQLString', function () {
+      expect(toGraphQL(new UUIDV4(), Sequelize)).to.equal(GraphQLString);
+    });
+  });
+
   describe('VIRTUAL', function () {
 
     it('should map to the sequelize return type', function () {
@@ -196,6 +204,12 @@ describe('typeMapper', () => {
   describe('JSONB', function () {
     it('should map to JSONType', function () {
       expect(toGraphQL(new JSONB(), Sequelize)).to.equal(JSONType);
+    });
+  });
+
+  describe('INET', function () {
+    it('should map to instance of GraphQLString', function () {
+      expect(toGraphQL(new INET('127.0.0.1'), Sequelize)).to.equal(GraphQLString);
     });
   });
 });

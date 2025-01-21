@@ -50,13 +50,16 @@ export function toGraphQL(sequelizeType, sequelizeTypes) {
     STRING,
     TEXT,
     UUID,
+    UUIDV4,
     DATE,
     DATEONLY,
     TIME,
     ARRAY,
     VIRTUAL,
     JSON,
-    JSONB
+    JSONB,
+    CITEXT,
+    INET,
   } = sequelizeTypes;
 
   // Map of special characters
@@ -80,10 +83,13 @@ export function toGraphQL(sequelizeType, sequelizeTypes) {
       sequelizeType instanceof STRING ||
       sequelizeType instanceof TEXT ||
       sequelizeType instanceof UUID ||
+      sequelizeType instanceof UUIDV4 ||
       sequelizeType instanceof DATEONLY ||
       sequelizeType instanceof TIME ||
       sequelizeType instanceof BIGINT ||
-      sequelizeType instanceof DECIMAL) {
+      sequelizeType instanceof DECIMAL ||
+      sequelizeType instanceof CITEXT ||
+      sequelizeType instanceof INET) {
     return GraphQLString;
   }
 

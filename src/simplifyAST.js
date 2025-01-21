@@ -102,11 +102,10 @@ module.exports = function simplifyAST(ast, info, parent) {
       simpleAST.fields[key].key = name;
     }
 
-    var hasArgs = selection && selection.arguments && Array.isArray(selection.arguments);
-    simpleAST.fields[key].args = hasArgs ? selection.arguments.reduce(function (args, arg) {
+    simpleAST.fields[key].args = selection.arguments.reduce(function (args, arg) {
       args[arg.name.value] = simplifyValue(arg.value, info);
       return args;
-    }, {}) : {};
+    }, {});
 
     if (parent) {
       Object.defineProperty(simpleAST.fields[key], '$parent', { value: parent, enumerable: false });
